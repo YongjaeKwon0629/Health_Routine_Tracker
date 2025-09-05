@@ -151,7 +151,7 @@
 ## 📑 7. API 명세서
 ### API 공통 규칙
 
-- 인증: 보호 API는 헤더 필요
+** - 인증: 보호 API는 헤더 필요 ** 
   
 ```
 Authorization: Bearer <JWT>
