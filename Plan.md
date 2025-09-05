@@ -143,7 +143,8 @@
 
 ## 🗄️ 8. DB ERD 다이어그램
 
-📌 User–Routine–Comment–Like 관계 ERD 포함 (이미지 첨부 예정)
+### 📌 User–Routine–Comment–Like 관계 ERD
+
 
 ---
 
@@ -156,6 +157,4 @@
 
 ---
 
-👉 이 `README.md`를 **GitHub 레포지토리 루트**에 넣으면 팀원들이 프로젝트 구조와 API를 한눈에 파악할 수 있습니다.
 
-원하시면 제가 이 **README에 ERD 다이어그램 이미지 삽입 코드**까지 추가해드릴까요? (`/docs/erd.png` 식으로 넣어서)
