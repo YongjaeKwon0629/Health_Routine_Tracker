@@ -31,7 +31,7 @@
 
 ## 📋 3. 요구사항 명세서
 
-### 3.1 기능 요구사항
+### 3.1 상위 기능 목록
 
 | ID   | 기능명      | 설명                   | 입력값/출력값                   | 우선순위 |
 | ---- | -------- | -------------------- | ------------------------- | ---- |
@@ -49,7 +49,69 @@
 | F-12 | 마이페이지    | 내 기록 및 통계 확인         | userId                    | 중    |
 
 ---
+### 3.2 상세 기능 요구(필드·검증·에러)  
 
+### 3.2.1 Routine 필드 & 검증  
+
+| 필드              | 타입                 | 제약                 | 예시           |
+| --------------- | ------------------ | ------------------ | ------------ |
+| date            | string(YYYY-MM-DD) | 필수, 사용자+date 유니크   | `2025-09-08` |
+| sleepHours      | number             | 0 ≤ x ≤ 16         | 7.5          |
+| exerciseType    | enum               | `WALK/RUN/GYM/ETC` | `RUN`        |
+| exerciseMinutes | int                | 0 ≤ x ≤ 600        | 30           |
+| meals           | string             | 0\~1000자           | `"아:샐러드…" `  |
+| waterMl         | int                | 0 ≤ x ≤ 10000      | 1800         |
+| note            | string             | 0\~1000자           | `"야식 참음"`    |
+
+**예외 규칙**
+
+- 400: 필드 검증 실패
+
+- 401: 토큰 없음/잘못됨
+
+- 403: 소유자 아님
+
+- 404: 리소스 없음
+
+- 409: 동일 날짜 루틴 중복  
+
+---
+
+### 3.2.2 Comment 필드 & 검증  
+
+| 필드      | 타입     | 제약                   |
+| ------- | ------ | -------------------- |
+| content | string | 1\~500자 (XSS escape) |
+
+---
+
+### 3.3 비기능 요구사항 (NFR)
+
+| 항목  | 목표/기준                                                      |
+| --- | ---------------------------------------------------------- |
+| 보안  | 비밀번호 Bcrypt(≥10 rounds), JWT HS256, CORS 허용 도메인 제한         |
+| 성능  | 단순 조회 p95 < 300ms, API TPS ≥ 50 (개발 기준)                    |
+| 신뢰성 | 5xx 오류율 < 1%                                               |
+| 로깅  | 요청/응답 요약, 에러 스택 로그                                         |
+| 가시성 | `/health` 헬스 체크, 기본 메트릭 수집                                 |
+| 확장성 | DB 인덱스: Routine(userId,date), Comment(routineId,createdAt) |
+| 테스트 | BE unit ≥ 40%, FE ≥ 30%, 핵심 E2E 2케이스                       |
+
+---
+### 3.4 데이터 모델(요약)  
+
+| 테이블        | 키/제약                                                     | 주요 컬럼                                                                                       |
+| ---------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `users`    | PK\:id(UUID), UK\:email, UK\:nickname                    | email, passwordHash, nickname, createdAt                                                    |
+| `routines` | PK\:id, UK:(userId,date), FK\:userId→users.id            | date, sleepHours, exerciseType, exerciseMinutes, meals, waterMl, note, createdAt, updatedAt |
+| `comments` | PK\:id, FK\:routineId, FK\:userId                        | content, createdAt, updatedAt                                                               |
+| `likes`    | PK\:id, UK:(routineId,userId), FK\:routineId, FK\:userId | createdAt                                                                                   |
+
+---
+
+
+
+---
 ## 👩‍💻 4. 직무 역할 및 활용 도구
 
 * **FE1**: Auth UI, 네비게이션 레이아웃
@@ -87,39 +149,128 @@
 ---
 
 ## 📑 7. API 명세서
+### API 공통 규칙
+
+- 인증: 보호 API는 헤더 필요
+  
+```
+Authorization: Bearer <JWT>
+Content-Type: application/json
+```
+
+- 에러 포맷:
+- 
+```
+{ "code": "ROUTINE_DUPLICATE", "message": "Routine already exists", "details": { "date": "2025-09-08" } }
+```
+
+- 페이지네이션: ?page=1&size=20 (기본 page=1, size=20, 최대 100)
+
+- 정렬: ?sort=field,asc|desc (기본 date,desc)
+
+- 필터: 날짜는 ?from=YYYY-MM-DD&to=YYYY-MM-DD
+
+- 버저닝: 헤더 Accept: application/vnd.hrt.v1+json (옵션) 또는 URL /v1/*
 
 ### 7.1 MEMBER-SERVICE (인증/회원 관리)
 
-| No. | Domain | Description  | Base URL | Detailed URL | Http Method | Full URL             | 담당자 (BE) | 상태   |
-| --- | ------ | ------------ | -------- | ------------ | ----------- | -------------------- | -------- | ---- |
-| 1   | MEMBER | 회원가입         | /auth    | /register    | POST        | /auth/register       | BE1      | 진행예정 |
-| 2   | MEMBER | 로그인 (JWT 발급) | /auth    | /login       | POST        | /auth/login          | BE1      | 진행예정 |
-| 3   | MEMBER | 회원정보 조회      | /members | /me          | GET         | /members/me          | BE1      | 진행예정 |
-| 4   | MEMBER | 비밀번호 변경      | /members | /me/password | PATCH       | /members/me/password | BE1      | 진행예정 |
-| 5   | MEMBER | 회원 탈퇴        | /members | /{id}        | DELETE      | /members/{id}        | BE1      | 진행예정 |
+| No   | Domain | Description | Base URL | Detailed URL | Method | Full URL             | Auth | 응답코드            | 담당  |
+| ---- | ------ | ----------- | -------- | ------------ | ------ | -------------------- | ---- | --------------- | --- |
+| M-01 | MEMBER | 회원가입        | /auth    | /register    | POST   | /auth/register       | -    | 201,400,409     | BE1 |
+| M-02 | MEMBER | 로그인(JWT)    | /auth    | /login       | POST   | /auth/login          | -    | 200,400,401     | BE1 |
+| M-03 | MEMBER | 내 정보 조회     | /members | /me          | GET    | /members/me          | ✅    | 200,401         | BE1 |
+| M-04 | MEMBER | 비밀번호 변경     | /members | /me/password | PATCH  | /members/me/password | ✅    | 204,400,401     | BE1 |
+| M-05 | MEMBER | 회원 탈퇴       | /members | /{id}        | DELETE | /members/{id}        | ✅    | 204,401,403,404 | BE1 |
 
+```
+  // Request
+{ "email": "a@a.com", "password": "123456", "nickname": "alice" }
+// 201 Response
+{ "id": "uuid", "email": "a@a.com", "nickname": "alice", "createdAt": "2025-09-06T09:00:00Z" }
+// 409 Response
+{ "code":"USER_DUPLICATE","message":"Email or nickname already used" }
+```
+
+```
+// Request
+{ "email":"a@a.com", "password":"123456" }
+// 200 Response
+{ "token":"<jwt>", "user": { "id":"uuid", "email":"a@a.com", "nickname":"alice" } }
+
+```
 ---
 
 ### 7.2 ROUTINE-SERVICE (루틴 관리)
 
-| No. | Domain  | Description | Base URL  | Detailed URL | Http Method | Full URL             | 담당자 (BE) | 상태   |
-| --- | ------- | ----------- | --------- | ------------ | ----------- | -------------------- | -------- | ---- |
-| 1   | ROUTINE | 루틴 작성       | /routines | -            | POST        | /routines            | BE2      | 진행예정 |
-| 2   | ROUTINE | 루틴 목록 조회    | /routines | ?from=\&to=  | GET         | /routines?from=\&to= | BE2      | 진행예정 |
-| 3   | ROUTINE | 루틴 상세 조회    | /routines | /{id}        | GET         | /routines/{id}       | BE2      | 진행예정 |
-| 4   | ROUTINE | 루틴 수정       | /routines | /{id}        | PATCH       | /routines/{id}       | BE2      | 진행예정 |
-| 5   | ROUTINE | 루틴 삭제       | /routines | /{id}        | DELETE      | /routines/{id}       | BE2      | 진행예정 |
+| No   | Domain  | Description   | Base URL  | Detailed URL                     | Method | Full URL       | Auth | 응답코드                | 담당  |
+| ---- | ------- | ------------- | --------- | -------------------------------- | ------ | -------------- | ---- | ------------------- | --- |
+| R-01 | ROUTINE | 루틴 생성         | /routines | -                                | POST   | /routines      | ✅    | 201,400,401,409     | BE2 |
+| R-02 | ROUTINE | 루틴 목록(기간/페이지) | /routines | ?from=\&to=\&page=\&size=\&sort= | GET    | /routines      | ✅    | 200,401             | BE2 |
+| R-03 | ROUTINE | 루틴 상세         | /routines | /{id}                            | GET    | /routines/{id} | ✅    | 200,401,404         | BE2 |
+| R-04 | ROUTINE | 루틴 수정         | /routines | /{id}                            | PATCH  | /routines/{id} | ✅    | 200,400,401,403,404 | BE2 |
+| R-05 | ROUTINE | 루틴 삭제         | /routines | /{id}                            | DELETE | /routines/{id} | ✅    | 204,401,403,404     | BE2 |
 
+- R-01 요청/응답
+```
+// Request
+{
+  "date": "2025-09-08",
+  "sleepHours": 7.5,
+  "exerciseType": "RUN",
+  "exerciseMinutes": 30,
+  "meals": "아:계란, 점:샐러드, 저:닭가슴살",
+  "waterMl": 1800,
+  "note": "야식 참음"
+}
+// 201 Response
+{
+  "id":"uuid","date":"2025-09-08","sleepHours":7.5,
+  "exerciseType":"RUN","exerciseMinutes":30,"meals":"…","waterMl":1800,"note":"…",
+  "createdAt":"2025-09-08T00:00:00Z","updatedAt":"2025-09-08T00:00:00Z"
+}
+// 409 Response
+{ "code":"ROUTINE_DUPLICATE","message":"Routine already exists for that date","details":{"date":"2025-09-08"} }
+
+```  
+- R-02 응답 (페이지네이션)
+```  
+{
+  "page": 1,
+  "size": 20,
+  "totalElements": 134,
+  "totalPages": 7,
+  "content": [
+    {
+      "id":"uuid","date":"2025-09-08",
+      "sleepHours":7,"exerciseType":"RUN","exerciseMinutes":30,
+      "waterMl":2000,
+      "summary":{"commentCount":2,"likeCount":5,"meLiked":true}
+    }
+  ]
+}
+
+```
+  
 ---
 
 ### 7.3 COMMENT-SERVICE (댓글 관리)
 
-| No. | Domain  | Description | Base URL  | Detailed URL   | Http Method | Full URL                | 담당자 (BE) | 상태   |
-| --- | ------- | ----------- | --------- | -------------- | ----------- | ----------------------- | -------- | ---- |
-| 1   | COMMENT | 댓글 작성       | /routines | /{id}/comments | POST        | /routines/{id}/comments | BE3      | 진행예정 |
-| 2   | COMMENT | 댓글 목록 조회    | /routines | /{id}/comments | GET         | /routines/{id}/comments | BE3      | 진행예정 |
-| 3   | COMMENT | 댓글 수정       | /comments | /{id}          | PATCH       | /comments/{id}          | BE3      | 진행예정 |
-| 4   | COMMENT | 댓글 삭제       | /comments | /{id}          | DELETE      | /comments/{id}          | BE3      | 진행예정 |
+| No   | Domain  | Description | Base URL  | Detailed URL   | Method | Full URL                | Auth | 응답코드                | 담당  |
+| ---- | ------- | ----------- | --------- | -------------- | ------ | ----------------------- | ---- | ------------------- | --- |
+| C-01 | COMMENT | 댓글 작성       | /routines | /{id}/comments | POST   | /routines/{id}/comments | ✅    | 201,400,401,404     | BE3 |
+| C-02 | COMMENT | 댓글 목록       | /routines | /{id}/comments | GET    | /routines/{id}/comments | ✅    | 200,401,404         | BE3 |
+| C-03 | COMMENT | 댓글 수정       | /comments | /{id}          | PATCH  | /comments/{id}          | ✅    | 200,400,401,403,404 | BE3 |
+| C-04 | COMMENT | 댓글 삭제       | /comments | /{id}          | DELETE | /comments/{id}          | ✅    | 204,401,403,404     | BE3 |
+
+- C-01 요청/응답
+  
+```
+// Request
+{ "content": "오늘 운동 멋지네요!" }
+// 201 Response
+{ "id":"uuid","routineId":"uuid","user":{"id":"uuid","nickname":"alice"},"content":"오늘 운동 멋지네요!","createdAt":"2025-09-08T10:00:00Z" }
+
+```
 
 ---
 
