@@ -151,7 +151,7 @@
 ## 📑 7. API 명세서
 ### API 공통 규칙
 
-** - 인증: 보호 API는 헤더 필요 ** 
+- 인증: 보호 API는 헤더 필요 
   
 ```
 Authorization: Bearer <JWT>
@@ -159,7 +159,7 @@ Content-Type: application/json
 ```
 
 - 에러 포맷:
-- 
+
 ```
 { "code": "ROUTINE_DUPLICATE", "message": "Routine already exists", "details": { "date": "2025-09-08" } }
 ```
@@ -281,6 +281,11 @@ Content-Type: application/json
 | 1   | LIKE   | 좋아요 토글      | /routines | /{id}/like   | POST        | /routines/{id}/like  | BE3      | 진행예정 |
 | 2   | LIKE   | 좋아요 개수 조회   | /routines | /{id}/likes  | GET         | /routines/{id}/likes | BE3      | 진행예정 |
 
+- L-01 응답
+
+```
+{ "routineId":"uuid", "liked": true, "likeCount": 6 }
+```
 ---
 
 ### 7.5 STATS-SERVICE (통계 관리)
@@ -290,16 +295,75 @@ Content-Type: application/json
 | 1   | STATS  | 주간 통계 조회    | /stats   | /weekly      | GET         | /stats/weekly?userId=\&startDate= | BE2      | 진행예정 |
 | 2   | STATS  | 월간 통계 조회    | /stats   | /monthly     | GET         | /stats/monthly?userId=\&month=    | BE2      | 진행예정 |
 
+- S-01 응답 (주간)
+
+```
+{
+  "range": ["2025-09-08","2025-09-14"],
+  "summary": { "sleepAvg": 6.9, "exerciseCount": 4, "waterTotal": 13200 },
+  "byDay": [
+    {"date":"2025-09-08","sleep":7.0,"exercise":true,"water":1800},
+    {"date":"2025-09-09","sleep":6.5,"exercise":false,"water":1500}
+  ]
+}
+```
+  
+- S-02 응답 (달력 배지)
+
+```
+{
+  "month": "2025-09",
+  "days": [
+    {"date":"2025-09-01","hasRoutine":false},
+    {"date":"2025-09-02","hasRoutine":true}
+  ]
+}
+```
 ---
 
-## 🗄️ 8. DB ERD 다이어그램
+### 8. 오류 코드 표 (공통)
+
+| 코드                 | HTTP | 메시지                            | 설명        |
+| ------------------ | ---- | ------------------------------ | --------- |
+| AUTH\_REQUIRED     | 401  | Authentication required        | 토큰 없음/만료  |
+| FORBIDDEN          | 403  | Forbidden                      | 소유자 아님    |
+| NOT\_FOUND         | 404  | Not found                      | 리소스 없음    |
+| USER\_DUPLICATE    | 409  | Email or nickname already used | 가입 중복     |
+| ROUTINE\_DUPLICATE | 409  | Routine already exists         | 하루 1루틴 위반 |
+| VALIDATION\_FAILED | 400  | Validation failed              | 필드 검증 오류  |
+| SERVER\_ERROR      | 500  | Server error                   | 내부 오류     |
+
+
+---
+### 9. 테스트 케이스(샘플)
+
+| TC    | 시나리오     | 단계                  | 기대 결과        |
+| ----- | -------- | ------------------- | ------------ |
+| TC-01 | 회원가입 성공  | POST /auth/register | 201, 유저 생성   |
+| TC-02 | 로그인 성공   | POST /auth/login    | 200, JWT 발급  |
+| TC-03 | 루틴 중복 방지 | 루틴 2회 생성            | 2번째 409      |
+| TC-04 | 권한 검증    | 타 사용자 루틴 수정         | 403          |
+| TC-05 | 좋아요 토글   | 토글 2회               | true → false |
+
+---
+---
+### 10. 변경 관리 & 버전 정책
+- 브레이킹 체인지: 메이저 버전 증가(v2)
+
+- 비호환 없는 추가: 마이너 증가(v1.1)
+
+- 버그픽스/문구 변경: 패치 증가(v1.0.1)
+
+- OpenAPI 문서(/swagger-ui)와 이 명세 동기화 필수
+---
+## 🗄️ 11. DB ERD 다이어그램
 
 ### 📌 User–Routine–Comment–Like 관계 ERD
 
 
 ---
 
-## 🚀 9. 향후 계획
+## 🚀 12. 향후 계획(확장성성)
 
 * 친구 팔로우/공유 기능
 * 목표 설정 및 알림 기능
